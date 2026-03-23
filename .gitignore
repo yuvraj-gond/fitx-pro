@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environment
+backend/venv/
+venv/
+ENV/
+env/
+.env
+
+# Database
+backend/database.db
+*.sqlite3
+
+# Node modules (if any)
+node_modules/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

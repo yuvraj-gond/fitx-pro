@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FitX Pro — Workout</title>
+<link rel="stylesheet" href="../assets/css/main.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b1117">
+<link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+</head>
+<body>
+<div class="app-shell">
+  <div class="main-content">
+    <div class="page-body">
+
+      <div class="tab-bar fade-up">
+        <button class="tab-btn active" onclick="switchTab('log',this)">🏋️ Log Session</button>
+        <button class="tab-btn"        onclick="switchTab('analytics',this)">📊 Analytics</button>
+      </div>
+
+      <!-- ── LOG WORKOUT ────────────────────────────────────────────────── -->
+      <div id="tab-log" class="tab-pane active fade-up-2">
+
+        <div class="grid-2">
+          <!-- Progressive Logger -->
+          <div class="card" id="loggerCard">
+            <div class="card-title" id="loggerTitle">Select Muscle Group</div>
+            
+            <!-- Step 1: Muscle Groups -->
+            <div id="step-muscle-group">
+              <div class="grid-2" style="gap:.8rem;">
+                <button class="btn btn-outline" style="height:60px;font-size:1.1rem;justify-content:flex-start;padding-left:1.5rem;" onclick="selMuscle('Chest')">🧱 Chest</button>
+                <button class="btn btn-outline" style="height:60px;font-size:1.1rem;justify-content:flex-start;padding-left:1.5rem;" onclick="selMuscle('Back')">🦇 Back</button>
+                <button class="btn btn-outline" style="height:60px;font-size:1.1rem;justify-content:flex-start;padding-left:1.5rem;" onclick="selMuscle('Shoulders')">🥥 Shoulders</button>
+                <button class="btn btn-outline" style="height:60px;font-size:1.1rem;justify-content:flex-start;padding-left:1.5rem;" onclick="selMuscle('Legs')">🦵 Legs</button>
+                <button class="btn btn-outline" style="height:60px;font-size:1.1rem;justify-content:flex-start;padding-left:1.5rem;" onclick="selMuscle('Biceps')">💪 Biceps</button>
+                <button class="btn btn-outline" style="height:60px;font-size:1.1rem;justify-content:flex-start;padding-left:1.5rem;" onclick="selMuscle('Triceps')">🧲 Triceps</button>
+                <button class="btn btn-outline" style="height:60px;font-size:1.1rem;justify-content:flex-start;padding-left:1.5rem;" onclick="selMuscle('Core')">🍫 Core</button>
+                <button class="btn btn-outline" style="height:60px;font-size:1.1rem;justify-content:flex-start;padding-left:1.5rem;" onclick="selMuscle('Cardio')">🏃 Cardio</button>
+              </div>
+            </div>
+
+            <!-- Step 2: Exercises -->
+            <div id="step-exercise" style="display:none;">
+              <button class="btn btn-sm" style="background:transparent;color:var(--text-2);padding:0;margin-bottom:1rem;" onclick="backToMuscle()">← Back to Muscles</button>
+              <div style="display:flex;flex-direction:column;gap:.5rem;" id="exerciseList"></div>
+            </div>
+
+            <!-- Step 3: Logging -->
+            <div id="step-log" style="display:none;">
+              <button class="btn btn-sm" style="background:transparent;color:var(--text-2);padding:0;margin-bottom:1rem;" onclick="backToExercise()">← Back to Exercises</button>
+              
+              <div style="font-size:1.5rem;font-weight:800;color:var(--text-0);margin-bottom:1.5rem;" id="activeExerciseName"></div>
+              
+              <div class="form-row-3" style="margin-bottom:1.5rem;">
+                <div class="form-group">
+                  <label class="form-label">Sets</label>
+                  <input type="number" id="exSets" class="form-control" value="1" min="1" style="font-size:1.5rem;height:60px;text-align:center;">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Reps</label>
+                  <input type="number" id="exReps" class="form-control" placeholder="10" min="1" style="font-size:1.5rem;height:60px;text-align:center;">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Weight (kg)</label>
+                  <input type="number" id="exWeight" class="form-control" placeholder="0" step="0.5" min="0" style="font-size:1.5rem;height:60px;text-align:center;color:var(--lime);">
+                </div>
+              </div>
+
+              <!-- Proactive Coach -->
+              <div id="coachMsg" style="background:var(--lime-glow);border:1px solid rgba(200,245,58,0.2);color:var(--text-0);font-size:.85rem;padding:.8rem;border-radius:8px;margin-bottom:1.5rem;display:flex;align-items:center;">
+                🔥 <strong>Coach:</strong> Select an exercise for an AI target.
+              </div>
+
+              <!-- Set Input -->
+              <div style="display:flex;gap:1rem;margin-bottom:1.5rem;align-items:flex-end;">
+                <div style="flex:1;">
+                  <label class="form-label">Weight (kg)</label>
+                  <input type="number" id="setWeight" class="form-control" placeholder="0" step="0.5" min="0" style="font-size:1.5rem;height:60px;text-align:center;color:var(--lime);">
+                </div>
+                <div style="flex:1;">
+                  <label class="form-label">Reps</label>
+                  <input type="number" id="setReps" class="form-control" placeholder="10" min="1" style="font-size:1.5rem;height:60px;text-align:center;">
+                </div>
+                <div style="flex:1;">
+                  <label class="form-label">Sets</label>
+                  <input type="number" id="setSets" class="form-control" value="1" min="1" style="font-size:1.5rem;height:60px;text-align:center;">
+                </div>
+              </div>
+
+              <input type="hidden" id="exDate">
+              <button class="btn btn-primary btn-full" onclick="logWorkout()" style="height:56px;font-size:1.1rem;margin-bottom:1.5rem;box-shadow:0 0 15px var(--lime-glow);">💾 Save Set</button>
+
+              <div id="exerciseHistoryBlock" style="background:var(--bg-2);border-radius:12px;padding:1.2rem;display:none;">
+                <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.8rem;">
+                  <span style="font-size:1.2rem;">🔥</span>
+                  <span style="font-weight:700;color:var(--text-0);">PR: </span>
+                  <span id="histPR" style="color:var(--orange);font-weight:600;">--</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.8rem;">
+                  <span style="font-size:1.2rem;">📅</span>
+                  <span style="font-weight:700;color:var(--text-0);">Last Time: </span>
+                  <span id="histLast" style="color:var(--text-1);">--</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:.5rem;">
+                  <span style="font-size:1.2rem;">📈</span>
+                  <span style="font-weight:700;color:var(--text-0);">Progress: </span>
+                  <span id="histDiff" style="font-weight:600;">--</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Session View -->
+          <div class="card" style="display:flex;flex-direction:column;">
+            <div class="section-header" style="margin-bottom:.5rem;">
+              <div class="card-title" style="margin:0;">Today's Session</div>
+              <div style="font-size:.8rem;color:var(--text-2);" id="sessionVol">0 kg Volume</div>
+            </div>
+            <div id="todaySession" style="flex:1;overflow-y:auto;max-height:450px;padding-right:.5rem;"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── ANALYTICS ──────────────────────────────────────────────────── -->
+      <div id="tab-analytics" class="tab-pane fade-up-2">
+        <div class="grid-2" style="margin-bottom:1.5rem;">
+          <div class="card">
+            <div class="card-title">💪 Muscle Distribution (30 Days)</div>
+            <div class="chart-container"><canvas id="mgChart"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-title">📦 Volume Over Time</div>
+            <div class="chart-container"><canvas id="volChart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-header">
+            <div class="card-title" style="margin:0;">🏋️ Exercise Progression</div>
+            <select id="progExSelect" class="form-control" style="width:200px;" onchange="updateProgressionChart()"></select>
+          </div>
+          <div class="chart-container" style="height:250px;"><canvas id="progChart"></canvas></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js?v=ux25"></script>
+<script src="../assets/js/shell.js?v=ux25"></script>
+<script>
+buildShell('workout', 'Workout Tracker');
+Chart.defaults.color = '#4a6278';
+Chart.defaults.borderColor = '#1f2d3a';
+
+let ALL_EXERCISES = {};
+let activeMuscle = '';
+let activeExercise = '';
+let lastLoggedWeight = 0;
+
+async function initWorkout() {
+  const dateStr = new Date().toISOString().split('T')[0];
+  document.getElementById('exDate').value = dateStr;
+  document.getElementById('exDate').addEventListener('change', loadTodaySession);
+  
+  try {
+    ALL_EXERCISES = await WorkoutAPI.exercises();
+  } catch(e) { console.error('Failed to load exercises', e); }
+  
+  loadTodaySession();
+  loadAnalytics();
+
+  // Check URL params for deep link ("Fix Now")
+  const urlParams = new URLSearchParams(window.location.search);
+  const m = urlParams.get('muscle');
+  if (m && ALL_EXERCISES[m]) {
+    selMuscle(m);
+  }
+}
+
+function selMuscle(muscle) {
+  activeMuscle = muscle;
+  document.getElementById('step-muscle-group').style.display = 'none';
+  document.getElementById('step-exercise').style.display = 'block';
+  document.getElementById('loggerTitle').textContent = muscle + ' Exercises';
+  
+  const list = ALL_EXERCISES[muscle] || [];
+  document.getElementById('exerciseList').innerHTML = list.map(ex => `
+    <button class="btn btn-outline" style="height:56px;justify-content:space-between;padding:0 1.5rem;font-size:1.1rem;" onclick="selExercise('${ex}')">
+      <span>${ex}</span>
+      <span style="color:var(--text-2);">→</span>
+    </button>
+  `).join('');
+}
+
+function backToMuscle() {
+  document.getElementById('step-exercise').style.display = 'none';
+  document.getElementById('step-muscle-group').style.display = 'block';
+  document.getElementById('loggerTitle').textContent = 'Select Muscle Group';
+}
+
+function backToExercise() {
+  document.getElementById('step-log').style.display = 'none';
+  document.getElementById('step-exercise').style.display = 'block';
+  document.getElementById('loggerTitle').textContent = activeMuscle + ' Exercises';
+}
+
+async function selExercise(ex) {
+  activeExercise = ex;
+  document.getElementById('step-exercise').style.display = 'none';
+  document.getElementById('step-log').style.display = 'block';
+  document.getElementById('loggerTitle').textContent = 'Log Set';
+  document.getElementById('activeExerciseName').textContent = ex;
+  document.getElementById('exerciseHistoryBlock').style.display = 'none';
+  
+  try {
+    const hist = await WorkoutAPI.exerciseHistory(ex);
+    document.getElementById('exerciseHistoryBlock').style.display = 'block';
+    
+    // Set PR
+    if (hist.pr && hist.pr.weight) {
+      document.getElementById('histPR').textContent = `${hist.pr.weight}kg × ${hist.pr.reps}`;
+    } else {
+      document.getElementById('histPR').textContent = 'No PR yet';
+    }
+    
+    // Set Last Workout
+    if (hist.last_workout) {
+      lastLoggedWeight = hist.last_workout.weight;
+      document.getElementById('histLast').textContent = `${hist.last_workout.weight}kg × ${hist.last_workout.reps}`;
+      document.getElementById('exWeight').value = lastLoggedWeight;
+      document.getElementById('exReps').value = hist.last_workout.reps;
+      document.getElementById('exSets').value = '1';
+    } else {
+      lastLoggedWeight = 0;
+      document.getElementById('histLast').textContent = 'First time logging!';
+      document.getElementById('exWeight').value = '';
+      document.getElementById('exReps').value = '';
+      document.getElementById('exSets').value = '1';
+    }
+    
+    calculateDiff();
+    document.getElementById('exWeight').oninput = calculateDiff;
+    
+  } catch(e) { console.error(e); }
+
+  // New logic for proactive coach and set inputs
+  try {
+    const history = await WorkoutAPI.exerciseHistory(ex); // Re-fetch or use existing 'hist' if it contains this structure
+    const coachMsgEl = document.getElementById('coachMsg');
+    if (history.length) { // Assuming history is an array of objects with pr and last
+       document.getElementById('histPR').textContent = `${history[0].pr.weight}kg × ${history[0].pr.reps}`;
+       document.getElementById('histLast').textContent = `${history[0].last.weight}kg × ${history[0].last.reps}`;
+       document.getElementById('setWeight').value = history[0].last.weight;
+       document.getElementById('setReps').value = history[0].last.reps;
+       document.getElementById('setSets').value = '1'; // Default to 1 set
+
+       const targetW = parseFloat(history[0].last.weight) + 2.5;
+       if (coachMsgEl) coachMsgEl.innerHTML = `<span style="margin-right:.5rem;">🔥</span> <span style="flex:1;"><strong>Coach:</strong> Try to hit <span style="color:var(--lime);font-weight:700;">${targetW}kg</span> today! (+2.5kg from last session)</span> <button class="btn btn-outline btn-xs" style="padding:.2rem .4rem;" onclick="document.getElementById('setWeight').value='${targetW}'">Apply</button>`;
+    } else {
+       document.getElementById('histPR').textContent = '-';
+       document.getElementById('histLast').textContent = '-';
+       document.getElementById('setWeight').value = '';
+       document.getElementById('setReps').value = '';
+       document.getElementById('setSets').value = '1';
+       if (coachMsgEl) coachMsgEl.innerHTML = `<span style="margin-right:.5rem;">🔥</span> <span><strong>Coach:</strong> Find your starting weight and aim for 10 reps!</span>`;
+    }
+  } catch(e) { console.error("Error updating coach message:", e); }
+}
+
+function calculateDiff() {
+  const currentWt = parseFloat(document.getElementById('exWeight').value) || 0;
+  const diffEl = document.getElementById('histDiff');
+  if (lastLoggedWeight > 0 && currentWt > 0) {
+    const d = currentWt - lastLoggedWeight;
+    if (d > 0) {
+      diffEl.textContent = `Improved +${d}kg 💪`;
+      diffEl.style.color = 'var(--lime)';
+    } else if (d < 0) {
+      diffEl.textContent = `${d}kg from last time`;
+      diffEl.style.color = 'var(--text-1)';
+    } else {
+      diffEl.textContent = `Matched last session`;
+      diffEl.style.color = 'var(--text-1)';
+    }
+  } else {
+    diffEl.textContent = '--';
+    diffEl.style.color = 'var(--text-1)';
+  }
+}
+
+async function logWorkout() {
+  const data = {
+    date: document.getElementById('exDate').value || new Date().toISOString().split('T')[0],
+    exercise: activeExercise,
+    muscle_group: activeMuscle.toUpperCase(),
+    sets: parseInt(document.getElementById('setSets').value), // Changed from exSets
+    reps: parseInt(document.getElementById('setReps').value), // Changed from exReps
+    weight_kg: parseFloat(document.getElementById('setWeight').value) || 0 // Changed from exWeight
+  };
+  
+  if (!data.exercise || !data.sets || !data.reps) return toast('Please fill all fields', 'warn');
+
+  const btn = document.querySelector('button[onclick="logWorkout()"]');
+  btn.innerHTML = '<span class="spinner"></span> Saving...';
+  try {
+    GlobalState.set('active_workout', true);
+    GlobalState.set('lastMuscle', activeMuscle);
+
+    const oldPR = document.getElementById('histPR').textContent;
+    const oldPRWeight = oldPR.includes('kg') ? parseFloat(oldPR.split('kg')[0]) : 0;
+
+    await WorkoutAPI.log(data);
+    
+    if (data.weight_kg > 0 && data.weight_kg > oldPRWeight) {
+      toast(`NEW PR! ${data.weight_kg}kg 🏆🔥`, 'success');
+    } else {
+      toast('Set logged! 💪', 'success');
+    }
+
+    loadTodaySession();
+    btn.innerHTML = '💾 Save Set';
+    loadAnalytics();
+    
+    // Update the history block automatically to reflect the new set as the 'last time'
+    selExercise(activeExercise);
+    
+  } catch(e) {
+    toast(e.message, 'error');
+    btn.innerHTML = '💾 Save Set';
+  }
+}
+
+async function loadTodaySession() {
+  const dateStr = document.getElementById('exDate').value;
+  const el = document.getElementById('todaySession');
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:1.2rem;padding-top:.5rem;">
+      <div class="skeleton" style="height:110px;border-radius:12px;"></div>
+      <div class="skeleton" style="height:110px;border-radius:12px;"></div>
+    </div>`;
+
+  try {
+    const sets = await WorkoutAPI.daily(dateStr) || [];
+    
+    // In-workout progression logic
+    const uniqueEx = new Set(sets.map(s => s.exercise_id)).size;
+    const goalEx = 5;
+    const pct = Math.min(100, Math.round((uniqueEx / goalEx) * 100));
+    
+    let progHtml = `
+      <div style="margin-bottom:1.5rem;background:var(--bg-2);padding:.8rem;border-radius:8px;border:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;font-size:.8rem;color:var(--text-1);margin-bottom:.5rem;">
+          <strong style="color:var(--text-0);">Session Progress</strong>
+          <span>${uniqueEx}/${goalEx} Exercises</span>
+        </div>
+        <div style="height:6px;background:var(--bg-3);border-radius:10px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:var(--lime);transition:var(--transition);border-radius:10px;"></div>
+        </div>
+      </div>
+    `;
+
+    if (!sets.length) {
+      el.innerHTML = progHtml + `
+        <div class="empty-state" style="padding-top:1rem;">
+          <div class="icon">🏋️</div>
+          <p>No sets logged today.</p>
+          <button class="btn btn-outline btn-sm" style="margin-top:1rem;" onclick="selMuscle('Chest'); setTimeout(()=>selExercise('Bench Press'),300)">💡 Suggestion: Start with Bench Press</button>
+        </div>`;
+      document.getElementById('sessionVol').textContent = '0 kg Volume';
+      return;
+    }
+
+    let vol = 0;
+    let html = progHtml + '<div class="session-list" style="display:flex;flex-direction:column;gap:1.5rem;">';
+    // Group by exercise
+    const grouped = {}; // Renamed from 'byEx' to 'grouped' to match original code
+    sets.forEach(s => {
+      vol += s.sets * s.reps * s.weight_kg;
+      const exName = s.exercise || "Unknown";
+      if (!grouped[exName]) grouped[exName] = [];
+      grouped[exName].push(s);
+    });
+
+    document.getElementById('sessionVol').textContent = vol.toLocaleString() + ' kg Volume';
+
+    html += '<div style="display:flex;flex-direction:column;gap:1.2rem;">';
+    for (const [exName, exSets] of Object.entries(grouped)) {
+      const mg = exSets[0].muscle_group;
+      html += `
+        <div style="background:var(--bg-3);border:1px solid var(--border);border-radius:12px;padding:1rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">
+            <div style="font-weight:700;font-size:1rem;color:var(--text-0);">${exName}</div>
+            <span class="badge" style="background:var(--purple-glow);color:var(--purple);border:none;">${mg}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;font-size:.75rem;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem;">
+            <span>Sets</span><span>Reps</span><span>Weight</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:.3rem;">
+            ${exSets.map((s, i) => `
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;font-size:.9rem;color:var(--text-0);padding:.3rem 0;background:var(--bg-2);border-radius:4px;padding-left:.5rem;">
+                <span style="color:var(--text-1)">Set ${i+1}</span>
+                <span>${s.reps}</span>
+                <span style="font-weight:600;color:var(--lime);">${s.weight_kg} kg</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    }
+    html += `<button class="btn btn-outline btn-full" style="margin-top:1.5rem;border-color:var(--lime);color:var(--lime)" onclick="finishSession()">✅ Finish Workout Session</button>`;
+    html += '</div>';
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = `<div class="empty-state"><div class="icon">❌</div><p>Failed to load session. Try again.</p></div>`; }
+}
+
+function finishSession() {
+  GlobalState.remove('active_workout');
+  toast('Session Finished! Great job 💪', 'success');
+  setTimeout(() => window.location.href = 'dashboard.html', 1500);
+}
+
+async function loadAnalytics() {
+  try {
+    globalStats = await WorkoutAPI.stats();
+
+    // Muscle Doughnut
+    const mg = globalStats.muscle_frequency;
+    if (Object.keys(mg).length > 0) {
+      const colors = ['#c8f53a','#38b2f0','#f5823a','#8b5cf6','#34e09e','#f04848','#f5c842'];
+      new Chart(document.getElementById('mgChart'), {
+        type: 'doughnut',
+        data: { labels: Object.keys(mg), datasets: [{ data: Object.values(mg), backgroundColor: colors, borderWidth: 0 }] },
+        options: { responsive:true, maintainAspectRatio:false, cutout:'65%', plugins:{ legend:{position:'right', labels:{color:'#a8b8c8'}}} }
+      });
+    }
+
+    // Volume Chart
+    const vol = globalStats.volume_over_time;
+    if (vol.length > 0) {
+      new Chart(document.getElementById('volChart'), {
+        type: 'bar',
+        data: {
+          labels: vol.map(v => new Date(v.date+'T00:00:00').toLocaleDateString('en-GB',{month:'short',day:'numeric'})),
+          datasets: [{ label:'Total Volume (kg)', data: vol.map(v => v.total_volume_kg), backgroundColor: '#38b2f0', borderRadius:6 }]
+        },
+        options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} }, scales: { x:{grid:{display:false}}, y:{grid:{color:'#1f2d3a'}} } }
+      });
+    }
+
+    // Setup Ex Progression
+    const prog = globalStats.exercise_progression;
+    const sel = document.getElementById('progExSelect');
+    sel.innerHTML = Object.keys(prog).map(ex => `<option value="${ex}">${ex}</option>`).join('');
+    if (Object.keys(prog).length > 0) updateProgressionChart();
+
+  } catch(e) { console.error('Error analytics', e); }
+}
+
+function updateProgressionChart() {
+  const ex = document.getElementById('progExSelect').value;
+  if (!ex || !globalStats) return;
+  const data = globalStats.exercise_progression[ex];
+
+  if (progChartInst) progChartInst.destroy();
+
+  progChartInst = new Chart(document.getElementById('progChart'), {
+    type: 'line',
+    data: {
+      labels: data.map(d => new Date(d.date+'T00:00:00').toLocaleDateString('en-GB',{month:'short',day:'numeric'})),
+      datasets: [{ label:'Max Weight (kg)', data: data.map(d => d.max_weight_kg), borderColor: '#c8f53a', backgroundColor: '#c8f53a15', fill: true, tension:0.4, borderWidth:2, pointRadius:4, pointBackgroundColor:'#c8f53a' }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} }, scales: { x:{grid:{color:'#1f2d3a'}}, y:{grid:{color:'#1f2d3a'}, beginAtZero:false} } }
+  });
+}
+
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+}
+
+initWorkout();
+</script>
+</body>
+</html>

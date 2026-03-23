@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FitX Pro — Nutrition</title>
+<link rel="stylesheet" href="../assets/css/main.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b1117">
+<link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+</head>
+<body>
+<div class="app-shell">
+  <div class="main-content">
+    <div class="page-body">
+
+      <div class="tab-bar fade-up">
+        <button class="tab-btn active" onclick="switchTab('log',this)">🥗 Daily Log</button>
+        <button class="tab-btn"        onclick="switchTab('trends',this)">📈 Weekly Trends</button>
+      </div>
+
+      <!-- ── LOG FOOD ─────────────────────────────────────────────────── -->
+      <div id="tab-log" class="tab-pane active fade-up-2">
+
+        <div class="grid-2">
+          <!-- Logger Card -->
+          <div class="card" style="display:flex;flex-direction:column;">
+            <div class="card-title">Log Food</div>
+            <div class="form-group">
+              <label class="form-label">Search Food Database</label>
+              <div class="input-icon-wrap">
+                <span class="icon">🔍</span>
+                <input type="text" id="foodSearch" class="form-control" placeholder="Search for foods, e.g. Chicken breast...">
+              </div>
+            </div>
+
+            <div id="foodResults" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:1rem;background:var(--bg-3);">
+              <!-- Search results injected here -->
+            </div>
+
+            <div id="selectedFoodPreview" style="display:none;background:var(--lime-glow);border:1px solid rgba(200,245,58,.2);padding:1rem;border-radius:var(--radius);margin-bottom:1.2rem;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+                <span id="sfName" style="font-weight:700;color:var(--lime);">Select a food</span>
+                <button class="btn btn-ghost btn-xs" onclick="clearSelected()">✕ Clear</button>
+              </div>
+              <div class="pill-group" style="margin-bottom:.5rem;">
+                <span class="badge badge-lime" id="sfCals">0 kcal</span>
+                <span class="badge badge-orange" id="sfProt">0g P</span>
+                <span class="badge badge-blue" id="sfCarbs">0g C</span>
+                <span class="badge badge-green" id="sfFat">0g F</span>
+              </div>
+              <p style="font-size:.7rem;color:var(--text-1);">*Macros per 100g. Adjust quantity below.</p>
+            </div>
+
+            <div class="form-row" style="margin-top:auto;">
+              <div class="form-group">
+                <label class="form-label">Quantity (grams)</label>
+                <input type="number" id="foodQty" class="form-control" placeholder="100" min="1">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Meal Time</label>
+                <select id="foodMeal" class="form-control">
+                  <option value="BREAKFAST">Breakfast</option>
+                  <option value="LUNCH">Lunch</option>
+                  <option value="DINNER">Dinner</option>
+                  <option value="SNACK">Snack</option>
+                </select>
+              </div>
+            </div>
+            <input type="date" id="foodDate" class="form-control" style="margin-bottom:1rem;">
+            <button class="btn btn-primary btn-full" onclick="addFood()">➕ Add to Diary</button>
+          </div>
+
+          <!-- Diary List -->
+          <div class="card" style="display:flex;flex-direction:column;">
+            <div class="section-header" style="margin-bottom:.5rem;">
+              <div class="card-title" style="margin:0;">Today's Diary</div>
+              <div style="display:flex;align-items:center;gap:1rem;">
+                <button class="btn btn-outline btn-xs" onclick="copyYesterday()" id="btnCopyYday">↻ Copy Yesterday</button>
+                <div style="font-size:.8rem;color:var(--text-2);" id="diaryTotalCals">0 kcal</div>
+              </div>
+            </div>
+
+            <div id="todayDiary" style="flex:1;overflow-y:auto;max-height:450px;padding-right:.5rem;">
+              <!-- Diary injected here -->
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── TRENDS ───────────────────────────────────────────────────── -->
+      <div id="tab-trends" class="tab-pane fade-up-2">
+        <div class="grid-2" style="margin-bottom:1.5rem;">
+          <div class="card">
+            <div class="card-title">📈 Weekly Calorie Trend</div>
+            <div class="chart-container"><canvas id="calChart"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-title">💪 Weekly Protein Trend</div>
+            <div class="chart-container"><canvas id="protChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">🥗 Average Macro Split (This Week)</div>
+          <div class="chart-container" style="height:250px;"><canvas id="splitChart"></canvas></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js?v=ux25"></script>
+<script src="../assets/js/shell.js?v=ux25"></script>
+<script>
+buildShell('nutrition', 'Nutrition Tracker');
+Chart.defaults.color = '#4a6278';
+Chart.defaults.borderColor = '#1f2d3a';
+
+const today = new Date().toISOString().split('T')[0];
+document.getElementById('foodDate').value = today;
+const hr = new Date().getHours();
+let defMeal = 'BREAKFAST';
+if (hr >= 11 && hr < 15) defMeal = 'LUNCH';
+else if (hr >= 15 && hr < 18) defMeal = 'SNACK';
+else if (hr >= 18) defMeal = 'DINNER';
+document.getElementById('foodMeal').value = defMeal;
+
+document.getElementById('foodSearch').addEventListener('input', searchFoods);
+document.getElementById('foodDate').addEventListener('change', loadTodayLog);
+
+let foods = [];
+let selectedFoodId = null;
+let recentFoods = JSON.parse(localStorage.getItem('fitx_recent_foods') || '[]');
+
+async function init() {
+  try {
+    foods = await NutritionAPI.foods();
+    renderRecentFoods();
+    loadTodayLog();
+    loadWeeklyTrends();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function searchFoods(e) {
+  const q = e.target.value.toLowerCase();
+  const resEL = document.getElementById('foodResults');
+  if (!q) { renderRecentFoods(); return; }
+
+  const hits = foods.filter(f => f.name.toLowerCase().includes(q) || f.category.toLowerCase().includes(q)).slice(0, 10);
+
+  if (!hits.length) {
+    resEL.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-2);font-size:.8rem;">No foods found.</div>';
+    return;
+  }
+
+  resEL.innerHTML = hits.map(f => `
+    <div style="padding:.7rem 1rem;border-bottom:1px solid var(--border);cursor:pointer;transition:background .2s;display:flex;justify-content:space-between;align-items:center;"
+         hover-bg="var(--bg-4)"
+         onmouseover="this.style.background='var(--bg-4)'" onmouseout="this.style.background='transparent'"
+         onclick="selectFood(${f.id})">
+      <div style="font-weight:500;font-size:.85rem;color:var(--text-0);">${f.name}</div>
+      <div style="font-size:.7rem;color:var(--text-2);">${f.calories_per_100g} kcal / 100g</div>
+    </div>
+  `).join('');
+  resEL.innerHTML = html;
+}
+
+function renderRecentFoods() {
+  const resEL = document.getElementById('foodResults');
+  if (!recentFoods.length) {
+    resEL.innerHTML = '<div style="padding:1rem;color:var(--text-1);font-size:.85rem;text-align:center;">Type to search our database...</div>';
+    return;
+  }
+  
+  resEL.innerHTML = '<div style="padding:.5rem 1rem;font-size:.7rem;text-transform:uppercase;color:var(--text-2);letter-spacing:.05em;">Recent Foods</div>' + 
+  recentFoods.map(f => `
+    <div class="food-result" onclick="selectFood(${f.id})">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:600;color:var(--text-0);">${f.name} <span style="font-size:11px;opacity:0.5;">(Recent)</span></span>
+        <span class="badge" style="background:var(--lime-glow);color:var(--lime);border:none;">${f.calories_per_100g} kcal</span>
+      </div>
+      <div style="font-size:.75rem;color:var(--text-1);margin-top:.3rem;">
+        ${f.protein_per_100g}g P • ${f.carbs_per_100g}g C • ${f.fat_per_100g}g F
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectFood(id) {
+  const f = foods.find(x => x.id === id);
+  if (!f) return;
+  
+  // Save to recents
+  recentFoods = recentFoods.filter(r => r.id !== f.id);
+  recentFoods.unshift(f);
+  if (recentFoods.length > 5) recentFoods.pop();
+  localStorage.setItem('fitx_recent_foods', JSON.stringify(recentFoods));
+
+  selectedFoodId = f.id;
+  document.getElementById('foodSearch').value = '';
+  document.getElementById('foodResults').innerHTML = '';
+  document.getElementById('selectedFoodPreview').style.display = 'block';
+
+  document.getElementById('sfName').textContent = f.name;
+  document.getElementById('sfCals').textContent = f.calories_per_100g + ' kcal';
+  document.getElementById('sfProt').textContent = f.protein_per_100g + 'g P';
+  document.getElementById('sfCarbs').textContent = f.carbs_per_100g + 'g C';
+  document.getElementById('sfFat').textContent = f.fat_per_100g + 'g F';
+}
+
+function clearSelected() {
+  selectedFoodId = null;
+  document.getElementById('selectedFoodPreview').style.display = 'none';
+}
+
+async function addFood() {
+  if (!selectedFoodId) return toast('Search and select a food first', 'warn');
+  const qty = parseFloat(document.getElementById('foodQty').value);
+  const meal = document.getElementById('foodMeal').value;
+  const date = document.getElementById('foodDate').value;
+  if (!qty) return toast('Enter quantity in grams', 'warn');
+
+  try {
+    await NutritionAPI.log({ food_id: selectedFoodId, quantity_g: qty, meal_type: meal, date });
+    toast('Added to diary!', 'success');
+    document.getElementById('foodQty').value = '';
+    clearSelected();
+    loadTodayLog();
+    loadWeeklyTrends(); // refresh charts silently
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function loadTodayLog() {
+  const dateStr = document.getElementById('foodDate').value;
+  const el = document.getElementById('todayDiary');
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:1.2rem;padding-top:.5rem;">
+      <div class="skeleton" style="height:80px;border-radius:8px;"></div>
+      <div class="skeleton" style="height:80px;border-radius:8px;"></div>
+      <div class="skeleton" style="height:80px;border-radius:8px;"></div>
+    </div>`;
+  try {
+    const data = await NutritionAPI.daily(dateStr) || {};
+    const logs = data.logs || [];
+    const sum = data.summary || { calories:0 };
+
+    document.getElementById('diaryTotalCals').textContent = sum.calories.toFixed(0) + ' kcal total';
+
+    if (!logs.length) {
+      el.innerHTML = `
+        <div class="empty-state" style="padding-top:1rem;">
+          <div class="icon">🍽️</div>
+          <p>You haven't logged food today.</p>
+          <button class="btn btn-outline btn-sm" style="margin-top:1rem;" onclick="document.getElementById('foodMeal').value='BREAKFAST';document.getElementById('foodSearch').focus()">🍳 Add Breakfast</button>
+        </div>`;
+      return;
+    }
+
+    const meals = ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'];
+    let html = '';
+
+    meals.forEach(m => {
+      const mLogs = logs.filter(l => l.meal_type === m);
+      if (mLogs.length === 0) return;
+
+      const mCals = mLogs.reduce((acc, l) => acc + l.calories, 0);
+
+      html += `
+        <div style="margin-bottom:1.5rem;">
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:.4rem;margin-bottom:.8rem;">
+            <span style="font-weight:700;font-size:.8rem;color:var(--text-1);letter-spacing:.05em;">${m}</span>
+            <span style="font-size:.8rem;color:var(--lime);font-weight:600;">${mCals.toFixed(0)} kcal</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:.6rem;">
+            ${mLogs.map(l => `
+              <div style="background:var(--bg-3);border:1px solid var(--border);border-radius:6px;padding:.7rem;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-weight:500;font-size:.85rem;color:var(--text-0);margin-bottom:.1rem;">${l.food.name}</div>
+                  <div style="font-size:.7rem;color:var(--text-2);">${l.quantity_g}g</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-weight:600;font-size:.85rem;color:var(--text-0);">${l.calories.toFixed(0)} kcal</div>
+                  <div style="font-size:.65rem;color:var(--text-2);margin-top:.1rem;">
+                    <span style="color:var(--orange)">${l.protein.toFixed(1)}p</span> ·
+                    <span style="color:var(--blue)">${l.carbs.toFixed(1)}c</span> ·
+                    <span style="color:var(--green)">${l.fat.toFixed(1)}f</span>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    });
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = `<div class="empty-state"><div class="icon">❌</div><p>Failed to load diary. Try again.</p></div>`; }
+}
+
+async function loadWeeklyTrends() {
+  try {
+    const weekly = await NutritionAPI.weekly();
+    if (!weekly.length) return;
+
+    const labels = weekly.map(d => new Date(d.date+'T00:00:00').toLocaleDateString('en-GB', {day:'numeric',month:'short'}));
+
+    new Chart(document.getElementById('calChart'), {
+      type: 'bar',
+      data: { labels, datasets: [{ label:'Calories', data: weekly.map(d=>d.calories), backgroundColor: '#c8f53a', borderRadius: 4 }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} }, scales: { x:{grid:{display:false}}, y:{grid:{color:'#1f2d3a'}} } }
+    });
+
+    new Chart(document.getElementById('protChart'), {
+      type: 'line',
+      data: { labels, datasets: [{ label:'Protein (g)', data: weekly.map(d=>d.protein), borderColor: '#f5823a', backgroundColor: '#f5823a20', fill:true, tension:0.4, borderWidth:2, pointRadius:4 }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} }, scales: { x:{grid:{color:'#1f2d3a'}}, y:{grid:{color:'#1f2d3a'}} } }
+    });
+
+    const sumP = weekly.reduce((a,b)=>a+b.protein,0)*4;
+    const sumC = weekly.reduce((a,b)=>a+b.carbs,0)*4;
+    const sumF = weekly.reduce((a,b)=>a+b.fat,0)*9;
+    const total = sumP + sumC + sumF;
+
+    if (total > 0) {
+      new Chart(document.getElementById('splitChart'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Protein (kcal)','Carbs (kcal)','Fat (kcal)'],
+          datasets: [{ data: [sumP, sumC, sumF], backgroundColor: ['#f5823a','#38b2f0','#34e09e'], borderWidth:0, hoverOffset:8 }]
+        },
+        options: { responsive:true, maintainAspectRatio:false, cutout:'65%', plugins:{ legend:{ position:'right', labels:{color:'#a8b8c8'} } } }
+      });
+    }
+
+  } catch(e) { console.error('Error loading trends', e); }
+}
+
+async function copyYesterday() {
+  const btn = document.getElementById('btnCopyYday');
+  btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const yday = new Date();
+    yday.setDate(yday.getDate() - 1);
+    const yStr = yday.toISOString().split('T')[0];
+    const data = await NutritionAPI.daily(yStr);
+    const logs = data.logs || [];
+    if (!logs.length) {
+      toast('No meals found yesterday!', 'warn');
+      btn.innerHTML = '↻ Copy Yesterday';
+      return;
+    }
+    const todayStr = document.getElementById('foodDate').value;
+    for (const l of logs) {
+      await NutritionAPI.log({ food_id: l.food.id, quantity_g: l.quantity_g, meal_type: l.meal_type, date: todayStr });
+    }
+    toast('Yesterday copied! 🥗', 'success');
+    loadTodayLog();
+    loadWeeklyTrends();
+  } catch(e) { toast(e.message, 'error'); }
+  btn.innerHTML = '↻ Copy Yesterday';
+}
+
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+}
+
+init();
+</script>
+</body>
+</html>

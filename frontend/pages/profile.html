@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FitX Pro — Profile</title>
+<link rel="stylesheet" href="../assets/css/main.css">
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b1117">
+<link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+</head>
+<body>
+<div class="app-shell">
+  <div class="main-content">
+    <div class="page-body">
+
+      <div class="grid-2 fade-up" style="gap:1.5rem;">
+
+        <!-- Edit Profile Form -->
+        <div class="card">
+          <div class="card-title">Personal Details</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Full Name</label>
+              <input type="text" id="profName" class="form-control" placeholder="John Doe">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Age</label>
+              <input type="number" id="profAge" class="form-control" placeholder="30">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Height (cm)</label>
+              <input type="number" id="profHeight" class="form-control" placeholder="180">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Weight (kg) — Target/Current</label>
+              <input type="number" id="profWeight" class="form-control" placeholder="75" step="0.1">
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="card-title">Fitness Goal</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.5rem;" id="goalSelector">
+            <div class="goal-btn" onclick="selGoal('fat_loss')">
+              <div style="font-size:1.8rem;margin-bottom:.5rem;">🔥</div>
+              <div style="font-weight:700;margin-bottom:.2rem;">Lose Weight</div>
+              <div style="font-size:.7rem;color:var(--text-1);">Caloric deficit</div>
+            </div>
+            <div class="goal-btn" onclick="selGoal('muscle_gain')">
+              <div style="font-size:1.8rem;margin-bottom:.5rem;">💪</div>
+              <div style="font-weight:700;margin-bottom:.2rem;">Build Muscle</div>
+              <div style="font-size:.7rem;color:var(--text-1);">Caloric surplus</div>
+            </div>
+            <div class="goal-btn" onclick="selGoal('maintenance')">
+              <div style="font-size:1.8rem;margin-bottom:.5rem;">🎯</div>
+              <div style="font-weight:700;margin-bottom:.2rem;">Maintain</div>
+              <div style="font-size:.7rem;color:var(--text-1);">Keep weight steady</div>
+            </div>
+          </div>
+          <input type="hidden" id="profGoal" value="muscle_gain">
+
+          <div class="form-group">
+            <label class="form-label">Activity Level</label>
+            <select id="profActivity" class="form-control">
+              <option value="sedentary">Sedentary (Office job, little exercise)</option>
+              <option value="light">Lightly Active (1-3 days/week)</option>
+              <option value="moderate">Moderately Active (3-5 days/week)</option>
+              <option value="very_active">Very Active (6-7 days/week)</option>
+              <option value="super_active">Extra Active (Labor job, intense daily training)</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary btn-full" id="saveProfBtn" onclick="saveProfile()" style="margin-top:1rem;height:48px;">💾 Save & Recalculate Targets</button>
+        </div>
+
+        <!-- Right Column: Stats & Subscription -->
+        <div style="display:flex;flex-direction:column;gap:1.5rem;">
+
+          <div class="card" id="calCard" style="display:none;background:var(--lime-glow);border:1px solid rgba(200,245,58,.2);">
+            <div class="card-title" style="color:var(--lime);">Your Daily Targets</div>
+            <div class="kpi-grid" style="grid-template-columns:1fr 1fr;gap:1.5rem;">
+              <div>
+                <div style="font-size:.72rem;text-transform:uppercase;color:var(--text-1);letter-spacing:.05em;">Calories</div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:2.8rem;font-weight:800;color:var(--text-0);line-height:1;margin-top:.2rem;" id="tcals">0</div>
+              </div>
+              <div>
+                <div style="font-size:.72rem;text-transform:uppercase;color:var(--text-1);letter-spacing:.05em;">Protein</div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:2.8rem;font-weight:800;color:var(--orange);line-height:1;margin-top:.2rem;" id="tprot">0<span style="font-size:1.5rem;font-weight:600;">g</span></div>
+              </div>
+            </div>
+            <p style="font-size:.78rem;color:var(--text-2);margin-top:1rem;line-height:1.5;">
+              These targets are automatically calculated based on your personal details, activity level, and fitness goal using the Mifflin-St Jeor equation.
+            </p>
+          </div>
+
+
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+buildShell('profile', 'Profile Settings');
+
+function selGoal(val) {
+  document.getElementById('profGoal').value = val;
+  document.querySelectorAll('.goal-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelector(`.goal-btn[onclick="selGoal('${val}')"]`).classList.add('selected');
+}
+
+async function saveProfile() {
+  const btn = document.getElementById('saveProfBtn');
+  btn.innerHTML = '<span class="spinner"></span> Saving...';
+  try {
+    const data = {
+      name: document.getElementById('profName').value || "User",
+      age: parseInt(document.getElementById('profAge').value) || 25,
+      gender: "male",
+      height_cm: parseFloat(document.getElementById('profHeight').value) || 170,
+      weight_kg: parseFloat(document.getElementById('profWeight').value) || 70,
+      activity_level: document.getElementById('profActivity').value,
+      fitness_goal: document.getElementById('profGoal').value
+    };
+    const updated = await ProfileAPI.upsert(data);
+    toast('Profile updated successfully!', 'success');
+    updateTargets(updated);
+    btn.innerHTML = '💾 Save & Recalculate Targets';
+  } catch(e) { toast(e.message, 'error'); btn.innerHTML = '💾 Save & Recalculate Targets'; }
+}
+
+async function loadProfile() {
+  try {
+    const data = await ProfileAPI.get();
+    if(data) {
+      document.getElementById('profName').value = data.name || '';
+      document.getElementById('profAge').value = data.age || '';
+      document.getElementById('profHeight').value = data.height_cm || '';
+      document.getElementById('profWeight').value = data.weight_kg || '';
+      document.getElementById('profActivity').value = data.activity_level || 'light';
+      selGoal(data.fitness_goal || 'muscle_gain');
+
+      if (data.target_calories) updateTargets(data);
+    } else {
+      selGoal('muscle_gain'); // defaults
+    }
+  } catch(e) {
+    if(!e.message.includes('404')) toast('Could not load profile', 'error');
+    selGoal('muscle_gain');
+  }
+
+
+}
+
+function updateTargets(data) {
+  document.getElementById('calCard').style.display = 'block';
+  document.getElementById('tcals').textContent = data.target_calories;
+  document.getElementById('tprot').innerHTML = `${data.target_protein_g}<span style="font-size:1.5rem;font-weight:600;">g</span>`;
+}
+
+loadProfile();
+</script>
+</body>
+</html>

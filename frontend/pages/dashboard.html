@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FitX Pro — Dashboard</title>
+<link rel="stylesheet" href="../assets/css/main.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b1117">
+<link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+</head>
+<body>
+<div class="app-shell">
+  <div class="main-content">
+    <div class="page-body" id="pageBody">
+      <div style="display:flex;flex-direction:column;gap:1.5rem;">
+        <div class="skeleton" style="height:60px;width:100%;max-width:400px;margin:0 auto;border-radius:100px;"></div>
+        <div class="kpi-grid" style="grid-template-columns:1fr 1fr 1fr;"><div class="skeleton" style="height:115px;"></div><div class="skeleton" style="height:115px;"></div><div class="skeleton" style="height:115px;"></div></div>
+        <div class="grid-2"><div class="skeleton" style="height:280px;"></div><div class="skeleton" style="height:280px;"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js?v=ux25"></script>
+<script src="../assets/js/shell.js?v=ux25"></script>
+<script>
+buildShell('dashboard', 'Dashboard');
+Chart.defaults.color       = '#4a6278';
+Chart.defaults.borderColor = '#1f2d3a';
+Chart.defaults.font.family = 'Inter';
+Chart.defaults.font.size   = 11;
+
+async function loadDashboard() {
+  const body = document.getElementById('pageBody');
+  try {
+    const [profile, weeklyNut, wkStats, wkStreak, insights, weightLogs, budget] =
+      await Promise.allSettled([
+        ProfileAPI.get(),
+        NutritionAPI.weekly(),
+        WorkoutAPI.stats(),
+        WorkoutAPI.streak(),
+        InsightsAPI.get(true),
+        WeightAPI.get(),
+        InsightsAPI.budget(),
+      ]);
+
+    const prof    = profile.status    === 'fulfilled' && profile.value    !== null ? profile.value    : null;
+    const weekly  = weeklyNut.status  === 'fulfilled' && weeklyNut.value  !== null ? weeklyNut.value  : [];
+    const stats   = wkStats.status    === 'fulfilled' && wkStats.value    !== null ? wkStats.value    : {};
+    const streak  = wkStreak.status   === 'fulfilled' && wkStreak.value   !== null ? wkStreak.value.streak || 0 : 0;
+    const insArr  = insights.status   === 'fulfilled' && insights.value   !== null ? insights.value   : [];
+    const weights = weightLogs.status === 'fulfilled' && weightLogs.value !== null ? weightLogs.value : [];
+    const bud     = budget.status     === 'fulfilled' && budget.value     !== null ? budget.value     : null;
+
+    const unread    = insArr.filter(i => !i.is_read).length;
+    const todayCal  = bud?.calories?.consumed ?? 0;
+    const todayProt = bud?.protein?.consumed  ?? 0;
+    const targetCal = prof?.target_calories   ?? 2000;
+    const targetProt= prof?.target_protein_g  ?? 150;
+
+    const calPct  = Math.min(100, (todayCal  / targetCal * 100)).toFixed(0);
+    const protPct = Math.min(100, (todayProt / targetProt * 100)).toFixed(0);
+
+    // Traffic Light Logic
+    const calStatus = todayCal > targetCal ? 'red' : todayCal > (targetCal * 0.8) ? 'green' : 'yellow';
+    const protStatus = todayProt >= targetProt ? 'green' : todayProt > (targetProt * 0.5) ? 'yellow' : 'red';
+    
+    // Check if workout was done today by seeing if they have any logs today
+    const workedOutToday = streak > 0 && stats?.daily_volume && stats.daily_volume[new Date().toISOString().split('T')[0]] > 0;
+    const hasActiveSession = GlobalState.get('active_workout');
+    const woStatus = workedOutToday ? 'green' : 'red';
+    
+    // Colors
+    const colMap = { 'green': 'var(--green)', 'yellow': 'var(--orange)', 'red': 'var(--red)' };
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todaySets = await WorkoutAPI.daily(todayStr).catch(()=>[]);
+    const uniqueEx = new Set((todaySets || []).map(s => s.exercise_id)).size;
+    const goalEx = 5;
+    const progressText = uniqueEx >= goalEx ? '✅ Complete' : '🏃 ' + uniqueEx + '/' + goalEx + ' Exercises';
+
+    let streakTrigger = '';
+    if (streak === 0) streakTrigger = "🚀 You're 1 workout away from a streak!";
+    else if (!workedOutToday) streakTrigger = "🔥 Finish today's plan to maintain your " + streak + " day streak!";
+    else streakTrigger = "🔥 " + streak + " day streak secured! Great job!";
+
+    body.innerHTML = `
+    <!-- Top Action -->
+    <div style="margin-bottom:2rem;text-align:center;" class="fade-up">
+      <div style="font-size:.9rem;font-weight:700;color:var(--orange);margin-bottom:1rem;text-transform:uppercase;letter-spacing:1px;text-shadow:0 0 10px rgba(245,130,58,0.5);">${streakTrigger}</div>
+      <a href="workout.html" class="btn btn-primary" style="font-size:1.4rem;padding:1.4rem 3rem;border-radius:100px;box-shadow:0 10px 30px rgba(200,245,58,0.25);font-weight:800;letter-spacing:1px;width:100%;max-width:400px;display:inline-flex;justify-content:center;">
+        ⚡ ${hasActiveSession ? 'CONTINUE WORKOUT' : 'START WORKOUT'}
+      </a>
+      <div style="background:var(--bg-2);padding:.8rem;border-radius:12px;display:inline-flex;flex-direction:column;align-items:center;gap:.4rem;margin-top:1.2rem;border:1px solid var(--border);">
+         <span style="font-weight:600;color:var(--text-0);font-size:.9rem;">🎯 Today's Plan: <span id="dashDynPlan" style="color:var(--lime);">Loading...</span></span>
+         <span style="font-size:.8rem;color:var(--text-1);">Progress: <strong style="color:var(--text-0);">${progressText}</strong></span>
+      </div>
+    </div>
+
+    <!-- Daily Traffic Lights -->
+    <div class="card fade-up-2" style="margin-bottom:1.5rem;">
+      <div class="card-title">🚦 Today's Status</div>
+      <div class="kpi-grid" style="grid-template-columns:1fr 1fr 1fr;">
+        
+        <div class="kpi-card" style="--accent:${colMap[calStatus]};border:1px solid ${colMap[calStatus]}40;background:${colMap[calStatus]}0a;">
+          <div class="kpi-label" style="color:${colMap[calStatus]};align-items:center;display:flex;gap:.5rem;">
+            <div style="width:10px;height:10px;border-radius:50%;background:${colMap[calStatus]};box-shadow:0 0 10px ${colMap[calStatus]}"></div>
+            Calories
+          </div>
+          <div class="kpi-value" style="font-size:1.8rem;">${Math.max(0, targetCal - todayCal).toFixed(0)}</div>
+          <div class="kpi-sub">left today</div>
+        </div>
+
+        <div class="kpi-card" style="--accent:${colMap[protStatus]};border:1px solid ${colMap[protStatus]}40;background:${colMap[protStatus]}0a;">
+          <div class="kpi-label" style="color:${colMap[protStatus]};align-items:center;display:flex;gap:.5rem;">
+            <div style="width:10px;height:10px;border-radius:50%;background:${colMap[protStatus]};box-shadow:0 0 10px ${colMap[protStatus]}"></div>
+            Protein
+          </div>
+          <div class="kpi-value" style="font-size:1.8rem;">${Math.max(0, targetProt - todayProt).toFixed(0)}g</div>
+          <div class="kpi-sub">left today</div>
+        </div>
+
+        <div class="kpi-card" style="--accent:${colMap[woStatus]};border:1px solid ${colMap[woStatus]}40;background:${colMap[woStatus]}0a;">
+          <div class="kpi-label" style="color:${colMap[woStatus]};align-items:center;display:flex;gap:.5rem;">
+            <div style="width:10px;height:10px;border-radius:50%;background:${colMap[woStatus]};box-shadow:0 0 10px ${colMap[woStatus]}"></div>
+            Workout
+          </div>
+          <div class="kpi-value" style="font-size:1.4rem;padding-top:.4rem;">${workedOutToday ? 'DONE ✅' : 'PENDING ❌'}</div>
+          <div class="kpi-sub" style="margin-top:.4rem;">${streak > 0 ? streak + ' day streak' : 'Start streak!'}</div>
+        </div>
+
+      </div>
+    </div>
+    
+    ${streak === 0 && weekly.length === 0 ? `
+    <div class="card fade-up-2" style="margin-bottom:1.5rem;border-color:var(--lime);background:var(--lime-glow);">
+      <div class="card-title" style="color:var(--lime);">🚀 Quick Start Guide</div>
+      <div style="display:flex;flex-direction:column;gap:.8rem;">
+        <a href="workout.html" style="display:flex;align-items:center;gap:.8rem;color:var(--text-0);text-decoration:none;">
+          <div class="icon" style="background:var(--bg-3);padding:.5rem;border-radius:8px;">🏋️</div>
+          <div style="flex:1;">
+            <div style="font-weight:600;">1. Start your first workout</div>
+            <div style="font-size:.75rem;color:var(--text-1);">Select a muscle group and log a set</div>
+          </div>
+          <div style="color:var(--lime);">→</div>
+        </a>
+        <a href="nutrition.html" style="display:flex;align-items:center;gap:.8rem;color:var(--text-0);text-decoration:none;">
+          <div class="icon" style="background:var(--bg-3);padding:.5rem;border-radius:8px;">🥗</div>
+          <div style="flex:1;">
+            <div style="font-weight:600;">2. Log your tracking meal</div>
+            <div style="font-size:.75rem;color:var(--text-1);">Search our database or add custom foods</div>
+          </div>
+          <div style="color:var(--lime);">→</div>
+        </a>
+        <a href="body.html" style="display:flex;align-items:center;gap:.8rem;color:var(--text-0);text-decoration:none;">
+          <div class="icon" style="background:var(--bg-3);padding:.5rem;border-radius:8px;">📏</div>
+          <div style="flex:1;">
+            <div style="font-weight:600;">3. Record body metrics</div>
+            <div style="font-size:.75rem;color:var(--text-1);">Set a baseline to track your composition changes</div>
+          </div>
+          <div style="color:var(--lime);">→</div>
+        </a>
+      </div>
+    </div>
+    ` : ''}
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.8rem;padding:0 .5rem;" class="fade-up-2">
+      <div style="font-weight:700;color:var(--text-0);">Nutrition & Progress</div>
+      <a href="nutrition.html" class="btn btn-outline btn-sm">➕ Log Food</a>
+    </div>
+
+    ${weekly.length === 0 ? `
+    <div class="empty-state card fade-up-2" style="margin-bottom:1.5rem;text-align:center;">
+      <div class="icon">🥗</div>
+      <h3>No nutrition data yet</h3>
+      <p style="margin-top:.5rem;color:var(--text-1);">Log your meals to track calories and unlock weekly macro trends.</p>
+      <a href="nutrition.html" class="btn btn-outline" style="margin-top:1rem;">Add First Meal</a>
+    </div>
+    ` : `
+    <!-- Charts -->
+    <div class="grid-2 fade-up-2" style="margin-bottom:1.5rem;">
+      <div class="card">
+        <div class="card-title">📈 Weekly Calories</div>
+        <div class="chart-container"><canvas id="calChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">💪 Weekly Protein</div>
+        <div class="chart-container"><canvas id="protChart"></canvas></div>
+      </div>
+    </div>
+    `}
+
+    <div class="grid-2 fade-up-3" style="margin-bottom:1.5rem;">
+      <div class="card">
+        <div class="card-title">⚖️ Weight History</div>
+        <div class="chart-container"><canvas id="weightChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🎯 Muscle Group Focus</div>
+        <div class="chart-container"><canvas id="muscleChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- AI Alerts Preview -->
+    <div class="card fade-up-4">
+      <div class="section-header" style="margin-bottom:1rem;">
+        <div class="card-title" style="margin:0;">🤖 Smart Coach</div>
+        <a href="insights.html" class="btn btn-outline btn-sm">View All →</a>
+      </div>
+      ${insArr.length === 0
+        ? `<div class="empty-state"><div class="icon">✅</div><p>All good! You're hitting all your targets.</p></div>`
+        : insArr.slice(0,3).map(i => insightCard(i)).join('')}
+    </div>`;
+
+    // Charts
+    if (weekly.length > 0) {
+      const labels  = weekly.map(d => fmt(d.date));
+      const calData = weekly.map(d => d.calories);
+      const protData= weekly.map(d => d.protein);
+
+      lineChart('calChart',  labels, calData,  'Calories',   '#c8f53a', prof ? Array(labels.length).fill(prof.target_calories)  : null);
+      lineChart('protChart', labels, protData, 'Protein (g)','#f5823a', prof ? Array(labels.length).fill(prof.target_protein_g) : null);
+    }
+
+    if (weights.length > 1) {
+      lineChart('weightChart', weights.map(w=>fmt(w.date)), weights.map(w=>w.weight_kg), 'Weight (kg)', '#38b2f0');
+    } else {
+      document.getElementById('weightChart').parentElement.innerHTML =
+        '<div class="empty-state"><div class="icon">⚖️</div><p>Log weight entries to see trend</p></div>';
+    }
+
+    const mgFreq = stats.muscle_frequency || {};
+    if (Object.keys(mgFreq).length > 0) {
+      const COLORS = ['#c8f53a','#38b2f0','#f5823a','#8b5cf6','#34e09e','#f04848','#f5c842','#f472b6'];
+      new Chart(document.getElementById('muscleChart'), {
+        type: 'doughnut',
+        data: { labels: Object.keys(mgFreq), datasets: [{ data: Object.values(mgFreq), backgroundColor: COLORS, borderWidth: 0, hoverOffset: 8 }] },
+        options: { responsive:true, maintainAspectRatio:false, cutout:'62%', plugins:{ legend:{ position:'right', labels:{ boxWidth:8, padding:10 } } } },
+      });
+    } else {
+      document.getElementById('muscleChart').parentElement.innerHTML =
+        '<div class="empty-state"><div class="icon">🏋️</div><p>Start your first workout to see muscle distribution!</p></div>';
+    }
+
+    // Dynamic Plan logic
+    const planEl = document.getElementById('dashDynPlan');
+    if (planEl) {
+      const topAlert = insArr.find(a => a.priority === 1) || insArr[0];
+      if (topAlert && topAlert.message.toLowerCase().includes('chest')) {
+         planEl.textContent = 'Chest Focus 💪';
+      } else if (topAlert && topAlert.message.toLowerCase().includes('leg')) {
+         planEl.textContent = 'Leg Day 🦵';
+      } else {
+         const muscles = ['Chest & Triceps', 'Back & Biceps', 'Legs & Core', 'Shoulders & Arms'];
+         const lastMG = GlobalState.get('lastMuscle');
+         if (lastMG === 'Chest') planEl.textContent = 'Back & Biceps';
+         else if (lastMG === 'Back') planEl.textContent = 'Legs & Core';
+         else if (lastMG === 'Legs') planEl.textContent = 'Shoulders & Arms';
+         else planEl.textContent = muscles[Math.floor(Math.random()*muscles.length)];
+      }
+    }
+
+  } catch (err) {
+    console.error("Dashboard Load Error:", err);
+    if (err.message && err.message.includes('401')) return window.location.href = 'login.html';
+    body.innerHTML = `
+      <div class="empty-state card" style="border-color:var(--red-glow);max-width:500px;margin:2rem auto;">
+        <div class="icon">❌</div>
+        <h3>Something went wrong</h3>
+        <p style="margin-top:.5rem;color:var(--red);">${err.message || 'Unknown error occurred'}</p>
+        <button class="btn btn-outline" style="margin-top:1rem;" onclick="loadDashboard()">↻ Retry</button>
+      </div>`;
+  }
+}
+
+function kpi(label, value, sub, accent) {
+  return `<div class="kpi-card" style="--accent:${accent}">
+    <div class="kpi-label">${label}</div>
+    <div class="kpi-value">${value}</div>
+    <div class="kpi-sub">${sub}</div>
+  </div>`;
+}
+
+function macroBar(label, data, color) {
+  if (!data) return '';
+  const pct = Math.min(100, data.pct).toFixed(0);
+  const over = data.pct > 100;
+  return `<div class="progress-wrap" style="--accent:${color}">
+    <div class="progress-header">
+      <span style="font-size:.83rem;font-weight:500;">${label}</span>
+      <span style="font-size:.78rem;color:var(--text-2);">${data.consumed.toFixed(0)} / ${data.target} · <span style="color:${color}">${data.remaining.toFixed(0)} left</span></span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill ${over?'over':''}" style="width:${pct}%;background:${over?'var(--red)':color}"></div></div>
+  </div>`;
+}
+
+function insightCard(ins) {
+  let btnHtml = '';
+  let coachMsg = ins.message;
+  if(ins.message.toLowerCase().includes('chest')) {
+    btnHtml = '<a href="workout.html?muscle=Chest" class="btn btn-primary btn-sm" style="margin-top:.5rem;">Start Chest Workout</a>';
+    coachMsg = 'You skipped chest recently — train it today to maintain balance! 💪';
+  } else if(ins.message.toLowerCase().includes('leg')) {
+    btnHtml = '<a href="workout.html?muscle=Legs" class="btn btn-primary btn-sm" style="margin-top:.5rem;">Start Leg Workout</a>';
+    coachMsg = 'Don\'t skip leg day! Hit those legs today. 🦵';
+  } else if(ins.category === 'Nutrition') {
+    btnHtml = '<a href="nutrition.html" class="btn btn-primary btn-sm" style="margin-top:.5rem;">Log Food Now</a>';
+    coachMsg = 'Your macros are falling behind. Stay on top of your nutrition! 🍳';
+  }
+
+  return `<div class="insight-card p${ins.priority}">
+    <div class="insight-title">${ins.title}</div>
+    <div class="insight-msg">${coachMsg}</div>
+    <div class="insight-action">🎯 ${ins.action}</div>
+    ${btnHtml}
+  </div>`;
+}
+
+function lineChart(id, labels, data, label, color, targetData) {
+  const ds = [{ label, data, borderColor: color, backgroundColor: color+'18', borderWidth:2, tension:.4, fill:true, pointBackgroundColor:color, pointRadius:3, pointHoverRadius:5 }];
+  if (targetData) ds.push({ label:'Target', data:targetData, borderColor:'#2e4255', borderDash:[5,5], borderWidth:1.5, pointRadius:0, fill:false });
+  new Chart(document.getElementById(id), {
+    type:'line', data:{ labels, datasets:ds },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:!!targetData, labels:{ boxWidth:10, padding:12 } } },
+      scales:{ x:{ grid:{ color:'#182028' }, ticks:{ maxRotation:0 } }, y:{ grid:{ color:'#182028' }, beginAtZero:true } } },
+  });
+}
+
+function fmt(d) { return new Date(d+'T00:00:00').toLocaleDateString('en-GB',{ day:'numeric', month:'short' }); }
+
+loadDashboard();
+</script>
+</body>
+</html>

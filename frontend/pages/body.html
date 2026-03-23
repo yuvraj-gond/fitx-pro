@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FitX Pro — Body Metrics</title>
+<link rel="stylesheet" href="../assets/css/main.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b1117">
+<link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+</head>
+<body>
+<div class="app-shell">
+  <div class="main-content">
+    <div class="page-body">
+
+      <div class="tab-bar fade-up">
+        <button class="tab-btn active" onclick="switchTab('measurements',this)">📏 Measurements</button>
+        <button class="tab-btn"        onclick="switchTab('progress',this)">📈 Progress Charts</button>
+      </div>
+
+      <!-- ── LOG MEASUREMENTS ───────────────────────────────────────── -->
+      <div id="tab-measurements" class="tab-pane active fade-up-2">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">Log Weekly Measurements</div>
+            <div class="form-group">
+              <label class="form-label">Date</label>
+              <input type="date" id="measDate" class="form-control">
+            </div>
+            <div style="font-size:.75rem;font-weight:700;color:var(--text-1);margin-bottom:.8rem;text-transform:uppercase;letter-spacing:.08em;">Upper Body</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Shoulders (cm)</label>
+                <input type="number" id="shoulders" class="form-control" placeholder="115" step="0.5">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Chest (cm)</label>
+                <input type="number" id="chest" class="form-control" placeholder="95" step="0.5">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Biceps (cm)</label>
+              <input type="number" id="biceps" class="form-control" placeholder="34" step="0.5">
+            </div>
+
+            <div style="font-size:.75rem;font-weight:700;color:var(--text-1);margin:1.5rem 0 .8rem 0;text-transform:uppercase;letter-spacing:.08em;">Lower Body</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Waist (cm)</label>
+                <input type="number" id="waist" class="form-control" placeholder="82" step="0.5">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Thigh (cm)</label>
+                <input type="number" id="thigh" class="form-control" placeholder="55" step="0.5">
+              </div>
+            </div>
+            <button class="btn btn-primary btn-full" onclick="saveMeasurement()">💾 Save Measurements</button>
+          </div>
+
+          <div class="card">
+            <div class="card-title">📊 Current vs Start</div>
+            <div id="deltaTable"></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:1.5rem;">
+          <div class="card-title">📋 Measurement History</div>
+          <div id="measHistory" class="table-wrap"></div>
+        </div>
+      </div>
+
+      <!-- ── PROGRESS CHARTS ────────────────────────────────────────── -->
+      <div id="tab-progress" class="tab-pane fade-up-2">
+        <div class="grid-2" style="margin-bottom:1.5rem;">
+          <div class="card">
+            <div class="card-title">💪 Muscle Circumference Progress</div>
+            <div class="chart-container" style="height:320px;"><canvas id="muscleLineChart"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-title">🕸️ Body Radar Chart</div>
+            <div class="chart-container" style="height:320px;"><canvas id="radarChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">🔥 Waist Progress (Fat Loss Indicator)</div>
+          <div class="chart-container" style="height:250px;"><canvas id="waistChart"></canvas></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+buildShell('body', 'Body Metrics');
+Chart.defaults.color = '#4a6278';
+Chart.defaults.borderColor = '#1f2d3a';
+
+const today = new Date().toISOString().split('T')[0];
+document.getElementById('measDate').value = today;
+
+async function saveMeasurement() {
+  const btn = document.querySelector('button[onclick="saveMeasurement()"]');
+  btn.innerHTML = '<span class="spinner"></span> Saving...';
+  try {
+    await MeasAPI.add({
+      date:         document.getElementById('measDate').value,
+      chest_cm:     parseFloat(document.getElementById('chest').value)    || null,
+      biceps_cm:    parseFloat(document.getElementById('biceps').value)   || null,
+      waist_cm:     parseFloat(document.getElementById('waist').value)    || null,
+      thigh_cm:     parseFloat(document.getElementById('thigh').value)    || null,
+      shoulders_cm: parseFloat(document.getElementById('shoulders').value)|| null,
+    });
+    toast('Measurements saved! 📏', 'success');
+    loadMeasurements();
+    btn.innerHTML = '💾 Save Measurements';
+  } catch(e) { toast(e.message, 'error'); btn.innerHTML = '💾 Save Measurements'; }
+}
+
+async function loadMeasurements() {
+  const data = await MeasAPI.get();
+
+  if (!data.length) {
+    document.getElementById('deltaTable').innerHTML =
+      '<div class="empty-state"><div class="icon">📏</div><p>Log your first measurements above to see your transformation.</p></div>';
+    document.getElementById('measHistory').innerHTML = '';
+    return;
+  }
+
+  // Delta table
+  const first = data[0], last = data[data.length - 1];
+  const fields = [
+    { key:'chest_cm',     label:'Chest',     icon:'💪', goal:'+' },
+    { key:'biceps_cm',    label:'Biceps',    icon:'💪', goal:'+' },
+    { key:'waist_cm',     label:'Waist',     icon:'🔥', goal:'-' },
+    { key:'thigh_cm',     label:'Thigh',     icon:'🦵', goal:'+' },
+    { key:'shoulders_cm', label:'Shoulders', icon:'🏋️', goal:'+' },
+  ];
+
+  let bestWin = null;
+  let maxDiff = -1;
+  for (const f of fields) {
+     const s = first[f.key], c = last[f.key];
+     if (s == null || c == null) continue;
+     const diff = c - s;
+     const goodDiff = f.goal === '+' ? diff : -diff;
+     if (goodDiff > maxDiff && goodDiff > 0) {
+        maxDiff = goodDiff;
+        bestWin = { label: f.label, diff: goodDiff, isLoss: f.goal === '-' };
+     }
+  }
+
+  let deltaHTML = bestWin ? `<div style="background:var(--lime-glow);color:var(--lime);padding:.8rem 1.2rem;border-radius:10px;font-size:.9rem;font-weight:600;margin-bottom:1.5rem;display:flex;align-items:center;gap:.6rem;box-shadow:0 4px 12px rgba(200,245,58,0.1);border:1px solid rgba(200,245,58,0.2);">🔥 Biggest Win: ${bestWin.isLoss ? '' : '+'}${bestWin.diff.toFixed(1)}cm ${bestWin.label}</div>` : '';
+  deltaHTML += '<div style="display:flex;flex-direction:column;gap:.8rem;">';
+  for (const f of fields) {
+    const s = first[f.key], c = last[f.key];
+    if (s == null || c == null) continue;
+    const diff = c - s;
+    const good = (f.goal === '+' && diff >= 0) || (f.goal === '-' && diff <= 0);
+    const color = diff === 0 ? 'var(--text-2)' : good ? 'var(--green)' : 'var(--red)';
+    const bgCol = diff === 0 ? 'var(--bg-3)' : good ? 'var(--green-glow)' : 'var(--red-glow)';
+    deltaHTML += `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1.2rem;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;">
+        <span style="font-weight:600;color:var(--text-0);">${f.icon} ${f.label}</span>
+        <div style="display:flex;align-items:center;gap:1.5rem;">
+          <span style="color:var(--text-1);font-size:.85rem;">${s} → ${c} cm</span>
+          <span class="badge" style="background:${bgCol};color:${color};border:none;min-width:60px;justify-content:center;font-size:.75rem;">
+            ${diff > 0 ? '+' : ''}${diff.toFixed(1)} cm
+          </span>
+        </div>
+      </div>`;
+  }
+  deltaHTML += '</div>';
+  document.getElementById('deltaTable').innerHTML = deltaHTML;
+
+  // History table
+  document.getElementById('measHistory').innerHTML = `
+    <table>
+      <thead><tr><th>Date</th><th>Chest</th><th>Biceps</th><th>Waist</th><th>Thigh</th><th>Shoulders</th></tr></thead>
+      <tbody>
+        ${data.slice().reverse().map(m => `
+        <tr>
+          <td>${new Date(m.date+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</td>
+          <td>${m.chest_cm     ? `<span style="color:var(--text-0);font-weight:500;">${m.chest_cm}</span>` : '—'}</td>
+          <td>${m.biceps_cm    ? `<span style="color:var(--text-0);font-weight:500;">${m.biceps_cm}</span>` : '—'}</td>
+          <td>${m.waist_cm     ? `<span style="color:var(--text-0);font-weight:500;">${m.waist_cm}</span>` : '—'}</td>
+          <td>${m.thigh_cm     ? `<span style="color:var(--text-0);font-weight:500;">${m.thigh_cm}</span>` : '—'}</td>
+          <td>${m.shoulders_cm ? `<span style="color:var(--text-0);font-weight:500;">${m.shoulders_cm}</span>` : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function loadProgressCharts() {
+  const data = await MeasAPI.get();
+  if (data.length < 2) {
+    ['muscleLineChart','radarChart','waistChart'].forEach(id => {
+      document.getElementById(id).parentElement.innerHTML =
+        '<div class="empty-state"><div class="icon">📏</div><p>Log at least 2 measurements on different dates to see your progress charts.</p></div>';
+    });
+    return;
+  }
+
+  const labels = data.map(d => new Date(d.date+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}));
+
+  // Muscle line chart
+  new Chart(document.getElementById('muscleLineChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label:'Chest',     data: data.map(d=>d.chest_cm),     borderColor:'#f5823a', backgroundColor:'#f5823a20', borderWidth:3, tension:.4, pointRadius:4 },
+        { label:'Biceps',    data: data.map(d=>d.biceps_cm),    borderColor:'#c8f53a', backgroundColor:'#c8f53a20', borderWidth:3, tension:.4, pointRadius:4 },
+        { label:'Thigh',     data: data.map(d=>d.thigh_cm),     borderColor:'#38b2f0', backgroundColor:'#38b2f020', borderWidth:3, tension:.4, pointRadius:4 },
+        { label:'Shoulders', data: data.map(d=>d.shoulders_cm), borderColor:'#8b5cf6', backgroundColor:'#8b5cf620', borderWidth:3, tension:.4, pointRadius:4 },
+      ],
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'top', labels:{ boxWidth:12, padding:20 } } },
+      scales:{ x:{ grid:{color:'#182028'} }, y:{ grid:{color:'#182028'} } },
+    },
+  });
+
+  // Radar: first vs last
+  const first = data[0], last = data[data.length-1];
+  new Chart(document.getElementById('radarChart'), {
+    type: 'radar',
+    data: {
+      labels: ['Chest','Biceps','Thigh','Shoulders'],
+      datasets: [
+        {
+          label:'Start',
+          data: [first.chest_cm, first.biceps_cm, first.thigh_cm, first.shoulders_cm],
+          borderColor:'#4a6278', backgroundColor:'rgba(74,98,120,.15)',
+          pointBackgroundColor:'#4a6278', borderWidth:2, pointRadius:3,
+        },
+        {
+          label:'Current',
+          data: [last.chest_cm, last.biceps_cm, last.thigh_cm, last.shoulders_cm],
+          borderColor:'#c8f53a', backgroundColor:'rgba(200,245,58,.25)',
+          pointBackgroundColor:'#c8f53a', borderWidth:3, pointRadius:4,
+        },
+      ],
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      scales:{
+        r:{
+          angleLines:{color:'#1f2d3a'},
+          grid:{color:'#1f2d3a'},
+          pointLabels:{color:'#eef2f7',font:{size:13}},
+          ticks:{display:false, maxTicksLimit:5}
+        }
+      },
+      plugins:{ legend:{ position:'bottom', labels:{ boxWidth:12, padding:20 } } },
+    },
+  });
+
+  // Waist chart
+  new Chart(document.getElementById('waistChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label:'Waist (cm)',
+        data: data.map(d=>d.waist_cm),
+        borderColor:'#34e09e', backgroundColor:'rgba(52,224,158,.15)',
+        borderWidth:3, tension:.4, fill:true, pointRadius:5, pointBackgroundColor:'#34e09e'
+      }],
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{ x:{ grid:{color:'#182028'} }, y:{ grid:{color:'#182028'}, reverse:false } },
+    },
+  });
+}
+
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+  if (tab === 'progress') loadProgressCharts();
+}
+
+loadMeasurements();
+</script>
+</body>
+</html>

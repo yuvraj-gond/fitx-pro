@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FitX Pro — AI Insights</title>
+<link rel="stylesheet" href="../assets/css/main.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b1117">
+<link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+</head>
+<body>
+<div class="app-shell">
+  <div class="main-content">
+    <div class="page-body">
+
+      <div class="tab-bar fade-up">
+        <button class="tab-btn active" onclick="switchTab('alerts',this)">🚨 Smart Alerts</button>
+        <button class="tab-btn"        onclick="switchTab('weekly',this)">📅 Weekly Summary</button>
+        <button class="tab-btn"        onclick="switchTab('predict',this)">🔮 Weight Prediction</button>
+      </div>
+
+      <!-- ── ALERTS ─────────────────────────────────────────────────── -->
+      <div id="tab-alerts" class="tab-pane active fade-up-2">
+        <div class="section-header">
+          <div>
+            <h2>Smart Alerts</h2>
+            <p style="font-size:.85rem;color:var(--text-2);margin-top:.2rem;">AI-powered recommendations based on your recent data</p>
+          </div>
+          <button class="btn btn-outline" onclick="refreshAlerts()">🔄 Refresh</button>
+        </div>
+
+        <!-- Priority legend -->
+        <div style="display:flex;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+          <span class="badge badge-red">🚨 High Priority</span>
+          <span class="badge badge-orange">⚠️ Medium Priority</span>
+          <span class="badge badge-green">✅ Positive</span>
+        </div>
+
+        <div class="page-body" id="pageBody">
+      
+      <!-- Identity Hook -->
+      <div id="identityHero" class="fade-up" style="background:var(--bg-2);padding:1.4rem;border-radius:12px;margin-bottom:1.5rem;display:flex;align-items:center;border:1px solid var(--border);box-shadow:var(--shadow-sm);border-left:4px solid var(--lime);"></div>
+
+      <div id="loading" class="loading-overlay"><div class="spinner spinner-lg"></div><span>Analyzing data…</span></div>
+        <div id="alertsContainer">
+          <!-- Alerts will be loaded here -->
+        </div>
+      </div>
+      </div>
+
+      <!-- ── WEEKLY SUMMARY ─────────────────────────────────────────── -->
+      <div id="tab-weekly" class="tab-pane fade-up-2">
+        <div id="weeklySummary">
+          <div class="loading-overlay"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- ── WEIGHT PREDICTION ───────────────────────────────────────── -->
+      <div id="tab-predict" class="tab-pane fade-up-2">
+        <div class="grid-2" style="margin-bottom:1.5rem;">
+          <div class="card">
+            <div class="card-title">⚖️ Log Today's Weight</div>
+            <div class="form-group">
+              <label class="form-label">Body Weight (kg)</label>
+              <div class="input-icon-wrap">
+                <span class="icon">⚖️</span>
+                <input type="number" id="weightInput" class="form-control" placeholder="75.5" step="0.1" min="30" max="300">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Date</label>
+              <input type="date" id="weightDate" class="form-control">
+            </div>
+            <button class="btn btn-primary btn-full" onclick="logWeight()">💾 Save Weight</button>
+          </div>
+          <div class="card">
+            <div class="card-title">📊 Weight History</div>
+            <div id="weightHistTable" class="table-wrap" style="max-height:210px;"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🔮 30-Day Weight Prediction <span class="badge badge-purple" style="margin-left:.5rem;font-size:.65rem;">ML Model</span></div>
+          <p style="font-size:.82rem;color:var(--text-2);margin-bottom:1.5rem;">Based on your historical weight trend using linear regression.</p>
+          <div class="chart-container" style="height:350px;"><canvas id="predChart"></canvas></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/api.js?v=ux25"></script>
+<script src="../assets/js/shell.js?v=ux25"></script>
+<script>
+buildShell('insights', 'AI Insights');
+Chart.defaults.color = '#4a6278';
+Chart.defaults.borderColor = '#1f2d3a';
+
+const today = new Date().toISOString().split('T')[0];
+document.getElementById('weightDate').value = today;
+
+// ── Smart Alerts ───────────────────────────────────────────────────────────
+async function loadAlerts(refresh = false) {
+  const el = document.getElementById('alertsContainer');
+  const loadingEl = document.getElementById('loading');
+  loadingEl.style.display = 'flex';
+  el.innerHTML = ''; // Clear previous alerts
+  try {
+    const insights = await InsightsAPI.get(refresh) || [];
+    loadingEl.style.display = 'none';
+    if (!insights.length) {
+      el.innerHTML = '<div class="empty-state"><div class="icon">🎉</div><p>No alerts — everything looks great!</p></div>';
+      return;
+    }
+    el.innerHTML = insights.map(ins => {
+      let btnHtml = '';
+      let coachMsg = ins.message;
+      if(ins.message.toLowerCase().includes('chest')) {
+        btnHtml = '<a href="workout.html?muscle=Chest" class="btn btn-primary btn-sm" style="margin-top:.5rem;">Start Chest Workout</a>';
+        coachMsg = 'You skipped chest recently — train it today to maintain balance! 💪';
+      } else if(ins.message.toLowerCase().includes('leg')) {
+        btnHtml = '<a href="workout.html?muscle=Legs" class="btn btn-primary btn-sm" style="margin-top:.5rem;">Start Leg Workout</a>';
+        coachMsg = 'Don\'t skip leg day! Hit those legs today. 🦵';
+      } else if(ins.category === 'Nutrition') {
+        btnHtml = '<a href="nutrition.html" class="btn btn-primary btn-sm" style="margin-top:.5rem;">Log Food Now</a>';
+        coachMsg = 'Your macros are falling behind. Stay on top of your nutrition! 🍳';
+      }
+
+      return `<div class="insight-card p${ins.priority}" id="ins-${ins.id}" style="${ins.is_read ? 'opacity:.6' : ''}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.3rem;">
+          <div class="insight-title">${ins.title}</div>
+          <div style="display:flex;gap:.5rem;align-items:center;">
+            <span class="badge ${ins.priority===1?'badge-red':ins.priority===2?'badge-orange':'badge-green'}">${ins.category}</span>
+            ${!ins.is_read ? `<button class="btn btn-outline btn-xs" onclick="markRead(${ins.id})">✓ Dismiss</button>` : '<span style="color:var(--text-2);font-size:.75rem;">Read</span>'}
+          </div>
+        </div>
+        <div class="insight-msg">${coachMsg}</div>
+        <div class="insight-action">🎯 ${ins.action}</div>
+        ${btnHtml}
+      </div>`
+    }).join('');
+  } catch(e) {
+    loadingEl.style.display = 'none';
+    if (e.message.includes('Upgrade required')) {
+      el.innerHTML = `<div class="upgrade-cta">
+        <div class="upgrade-cta-title">Unlock Premium Insights</div>
+        <div class="upgrade-cta-sub">Upgrade your account to access personalized AI alerts, machine learning weight predictions, and detailed weekly summaries.</div>
+        <a href="profile.html" class="btn btn-primary">Upgrade Now →</a>
+      </div>`;
+    } else {
+      el.innerHTML = `<p style="color:var(--red)">${e.message}</p>`;
+    }
+  }
+}
+
+async function refreshAlerts() {
+  toast('Refreshing insights…', 'info');
+  await loadAlerts(true);
+}
+
+async function markRead(id) {
+  await InsightsAPI.markRead(id);
+  document.getElementById(`ins-${id}`).style.opacity = '.5';
+}
+
+// ── Weekly Summary ─────────────────────────────────────────────────────────
+async function loadWeeklySummary() {
+  const el = document.getElementById('weeklySummary');
+  try {
+    const stats = await WorkoutAPI.stats();
+
+    // Long-Term Identity hook
+    const totalWos = Object.keys(stats.daily_volume || {}).length;
+    const heroEl = document.getElementById('identityHero');
+    if (heroEl) {
+      if (totalWos > 0) {
+        heroEl.innerHTML = `<span style="font-size:2.2rem;margin-right:1rem;text-shadow:0 0 15px rgba(200,245,58,0.4);">🏅</span> <div style="flex:1;"><div style="font-weight:800;font-size:1.2rem;color:var(--text-0);text-transform:uppercase;letter-spacing:.05em;">You've trained ${totalWos} times</div><div style="font-size:.85rem;color:var(--text-1);margin-top:.3rem;">You're building an unstoppable habit. Keep pushing forward!</div></div>`;
+      } else {
+        heroEl.style.display = 'none';
+      }
+    }
+    
+    // Weekly Summary Builder
+    const s = stats.weekly_summary || {};
+    const gradeColor = { A:'var(--green)', B:'var(--lime)', C:'var(--orange)', D:'var(--red)' };
+
+    el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:1.5rem;margin-bottom:2rem;flex-wrap:wrap;">
+      <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-l);padding:1.8rem 2.5rem;text-align:center;min-width:180px;box-shadow:var(--shadow-sm);">
+        <div class="label" style="margin-bottom:.5rem;">Weekly Grade</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:4.5rem;font-weight:800;color:${gradeColor[s.grade]||'var(--text-2)'};line-height:1;text-shadow:0 0 30px ${gradeColor[s.grade]}40;">${s.grade}</div>
+        <div style="font-size:.8rem;color:var(--text-2);margin-top:.8rem;">${s.grade === 'A' ? 'Flawless week! Keep it up 🔥' : s.grade === 'B' ? 'Great job! Hit your protein to reach A' : 'Do 3 workouts this week to reach B 💪'}</div>
+      </div>
+      <div class="kpi-grid" style="flex:1;min-width:300px;">
+        ${kpi('🔥 Avg Calories',   s.avg_daily_calories + ' kcal', 'daily average', 'var(--lime)')}
+        ${kpi('🥩 Avg Protein',    s.avg_daily_protein + 'g', 'daily average', 'var(--orange)')}
+        ${kpi('🏋️ Sessions',       s.workout_sessions, 'this week', 'var(--blue)')}
+        ${kpi('📦 Total Volume',   s.total_volume_kg + ' kg', 'lifted', 'var(--purple)')}
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Calorie Adherence</div>
+        <div style="display:flex;align-items:center;gap:1.5rem;">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:3rem;font-weight:800;color:var(--lime);">${s.calorie_adherence}%</div>
+          <div style="flex:1">
+            <div class="progress-bar" style="height:10px;"><div class="progress-fill" style="width:${Math.min(100,s.calorie_adherence)}%"></div></div>
+            <div style="font-size:.83rem;color:var(--text-2);margin-top:.5rem;">of daily calorie target hit</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Protein Adherence</div>
+        <div style="display:flex;align-items:center;gap:1.5rem;">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:3rem;font-weight:800;color:var(--orange);">${s.protein_adherence}%</div>
+          <div style="flex:1">
+            <div class="progress-bar" style="height:10px;"><div class="progress-fill" style="background:var(--orange);width:${Math.min(100,s.protein_adherence)}%"></div></div>
+            <div style="font-size:.83rem;color:var(--text-2);margin-top:.5rem;">of protein goal achieved</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    ${s.muscles_trained.length ? `
+    <div class="card" style="margin-top:1.5rem;">
+      <div class="card-title">💪 Muscles Trained This Week</div>
+      <div class="pill-group">
+        ${s.muscles_trained.map(m => `<span class="badge badge-lime">${m}</span>`).join('')}
+      </div>
+    </div>` : ''}`;
+  } catch(e) {
+    if (e.message.includes('Upgrade required')) { /* handled in alerts */ }
+    else el.innerHTML = `<p style="color:var(--red)">${e.message}</p>`;
+  }
+}
+
+function kpi(label, value, sub, accent) {
+  return `<div class="kpi-card" style="--accent:${accent}">
+    <div class="kpi-label">${label}</div>
+    <div class="kpi-value">${value}</div>
+    <div class="kpi-sub">${sub}</div>
+  </div>`;
+}
+
+// ── Weight Prediction ──────────────────────────────────────────────────────
+async function loadWeightSection() {
+  try {
+    const history = await WeightAPI.get();
+
+    if (history.length) {
+      document.getElementById('weightHistTable').innerHTML =
+        `<table><thead><tr><th>Date</th><th>Weight (kg)</th></tr></thead><tbody>
+        ${history.slice().reverse().slice(0,10).map(w => `<tr><td>${new Date(w.date+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</td><td><span style="font-weight:600;color:var(--text-0);">${w.weight_kg} kg</span></td></tr>`).join('')}
+        </tbody></table>`;
+    }
+
+    try {
+      const prediction = await InsightsAPI.weightPred();
+
+      if (history.length >= 3 && prediction.length) {
+        const histDates = history.map(w => new Date(w.date+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}));
+        const histWeights = history.map(w => w.weight_kg);
+        const predDates = prediction.map(p => new Date(p.date+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}));
+        const predWeights = prediction.map(p => p.predicted_weight);
+
+        new Chart(document.getElementById('predChart'), {
+          type: 'line',
+          data: {
+            labels: [...histDates, ...predDates],
+            datasets: [
+              {
+                label: 'Actual Weight',
+                data: [...histWeights, ...Array(predDates.length).fill(null)],
+                borderColor: '#38b2f0', backgroundColor: '#38b2f025',
+                borderWidth: 3, tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor:'#38b2f0',
+              },
+              {
+                label: '30-Day ML Prediction',
+                data: [...Array(histDates.length - 1).fill(null), histWeights[histWeights.length - 1], ...predWeights],
+                borderColor: '#c8f53a', borderDash: [6, 4],
+                borderWidth: 2.5, tension: 0.4, pointRadius: 0, fill: false,
+              },
+            ],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { boxWidth: 12, padding:18 } },
+              tooltip: { backgroundColor:'rgba(11,17,23,0.9)', titleColor:'#c8f53a', padding:12, callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)} kg` } } },
+            scales: {
+              x: { grid: { color: '#182028' }, ticks: { maxTicksLimit: 12 } },
+              y: { grid: { color: '#182028' }, title: { display: true, text: 'Weight (kg)', color:'#4a6278' } },
+            },
+          },
+        });
+      } else {
+        new Chart(document.getElementById('predChart'), {
+          type: 'line',
+          data: {
+            labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+            datasets: [{ label:'Sample Path', data:[75, 74.2, 73.5, 72.8], borderColor:'#c8f53a60', borderDash:[5,5], borderWidth:2, fill:false, pointRadius:0, tension:0.4 }]
+          },
+          options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{enabled:false} }, scales:{ x:{grid:{display:false}}, y:{grid:{display:false}, ticks:{display:false}} } }
+        });
+        const parent = document.getElementById('predChart').parentElement;
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(17,24,32,0.8);backdrop-filter:blur(3px);padding:2rem;text-align:center;border-radius:12px;';
+        overlay.innerHTML = '<div style="font-size:2rem;margin-bottom:.5rem;">🔮</div><div style="font-weight:600;color:var(--text-0);">Prediction Locked</div><div style="font-size:.85rem;margin-top:.5rem;color:var(--text-1);">Prediction will appear after 3 entries.</div>';
+        parent.appendChild(overlay);
+      }
+    } catch(e) {
+      if (e.message.includes('Upgrade')) {
+        document.getElementById('predChart').parentElement.innerHTML = `<div class="empty-state"><p style="color:var(--purple)">🔮 Upgrade to Premium to unlock Machine Learning weight predictions!</p></div>`;
+      }
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function logWeight() {
+  const val  = parseFloat(document.getElementById('weightInput').value);
+  const date = document.getElementById('weightDate').value;
+  if (!val || !date) { toast('Enter weight and date', 'error'); return; }
+  const btn = document.querySelector('button[onclick="logWeight()"]');
+  btn.innerHTML = '<span class="spinner"></span> Saving...';
+  try {
+    await WeightAPI.add({ date, weight_kg: val });
+    toast('Weight logged! ⚖️', 'success');
+    loadWeightSection();
+    btn.innerHTML = '💾 Save Weight';
+  } catch(e) { toast(e.message, 'error'); btn.innerHTML = '💾 Save Weight'; }
+}
+
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+  if (tab === 'weekly')  loadWeeklySummary();
+  if (tab === 'predict') loadWeightSection();
+}
+
+// Init
+loadAlerts();
+loadWeightSection();
+</script>
+</body>
+</html>
